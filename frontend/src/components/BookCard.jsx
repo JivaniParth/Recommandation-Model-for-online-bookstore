@@ -42,9 +42,9 @@ const BookCard = ({ book, favorites, toggleFavorite, addToCart }) => {
         </p>
 
         <div className="mb-3">
-          <StarRating rating={book.rating} />
+          <StarRating rating={book.rating || 0} />
           <p className="text-xs text-gray-500 mt-1">
-            {book.reviews.toLocaleString()} reviews
+            {book.reviews ? book.reviews.toLocaleString() : 0} reviews
           </p>
         </div>
 
