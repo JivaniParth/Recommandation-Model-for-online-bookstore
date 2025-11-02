@@ -1,0 +1,97 @@
+// ecommerce-backend/db/oracleDb.js
+const oracledb = require("oracledb");
+
+// Enable auto-commit for every statement
+oracledb.autoCommit = true;
+
+// Configure Oracle client
+// Set this to your Oracle Instant Client location if needed
+oracledb.initOracleClient({
+  libDir: "C:\\oracle\\instantclient_19_8",
+});
+
+const dbConfig = {
+  user: process.env.ORACLE_USER,
+  password: process.env.ORACLE_PASSWORD,
+  connectString: process.env.ORACLE_CONNECTION_STRING,
+};
+
+// Create connection pool
+let pool;
+
+async function initialize() {
+  try {
+    pool = await oracledb.createPool({
+      user: dbConfig.user,
+      password: dbConfig.password,
+      connectString: dbConfig.connectString,
+      poolMin: 2,
+      poolMax: 10,
+      poolIncrement: 2,
+      poolTimeout: 60,
+    });
+    console.log("✅ Oracle Database connection pool created successfully");
+    console.log(`📊 Connected to: ${dbConfig.connectString}`);
+  } catch (err) {
+    console.error("❌ Error creating Oracle connection pool:", err);
+    throw err;
+  }
+}
+
+async function close() {
+  try {
+    if (pool) {
+      await pool.close(10);
+      console.log("🔌 Oracle connection pool closed");
+    }
+  } catch (err) {
+    console.error("Error closing Oracle pool:", err);
+  }
+}
+
+async function execute(sql, binds = [], options = {}) {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const result = await connection.execute(sql, binds, options);
+    return result;
+  } catch (err) {
+    console.error("Oracle execute error:", err);
+    throw err;
+  } finally {
+    if (connection) {
+      try {
+        await connection.close();
+      } catch (err) {
+        console.error("Error closing connection:", err);
+      }
+    }
+  }
+}
+
+// Helper function to convert Oracle result to array of objects
+function resultToArray(result) {
+  if (!result.rows || result.rows.length === 0) {
+    return [];
+  }
+
+  const columns = result.metaData.map((col) => col.name.toLowerCase());
+
+  return result.rows.map((row) => {
+    const obj = {};
+    columns.forEach((col, index) => {
+      obj[col] = row[index];
+    });
+    return obj;
+  });
+}
+
+module.exports = {
+  initialize,
+  close,
+  execute,
+  resultToArray,
+  get pool() {
+    return pool;
+  },
+};
