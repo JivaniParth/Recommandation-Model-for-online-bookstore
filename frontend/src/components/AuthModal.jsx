@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { X, Eye, EyeOff, Mail, Lock, User, Phone } from "lucide-react";
 import { useAuth } from "./useAuth";
+import { postJSON } from "./api";
 
 const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
-  const [mode, setMode] = useState(initialMode); // "login" or "signup"
+  const [mode, setMode] = useState(initialMode); // "login", "signup", "forgot", or "reset"
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -14,6 +15,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     confirmPassword: "",
   });
   const [errors, setErrors] = useState({});
+  const [resetToken, setResetToken] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const { login, signup, isLoading } = useAuth();
 
@@ -100,6 +103,14 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (mode === "forgot") {
+      return handleForgotPassword();
+    }
+
+    if (mode === "reset") {
+      return handleResetPassword();
+    }
+
     if (!validateForm()) return;
 
     try {
@@ -128,9 +139,122 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!formData.email) {
+      setErrors({ email: "Email is required" });
+      return;
+    }
+
+    try {
+      const res = await postJSON("/api/auth/forgot-password", {
+        email: formData.email,
+      });
+      setSuccessMessage(
+        res.message || "If the email exists, a reset token has been sent."
+      );
+      if (res.token) {
+        setResetToken(res.token);
+      }
+      setErrors({});
+    } catch (error) {
+      setErrors({
+        general:
+          error.response?.message || error.message || "Failed to request reset",
+      });
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetToken) {
+      setErrors({ resetToken: "Reset token is required" });
+      return;
+    }
+
+    if (!formData.password) {
+      setErrors({ password: "Password is required" });
+      return;
+    }
+
+    const passwordErrors = validatePassword(formData.password);
+    if (passwordErrors.length > 0) {
+      setErrors({ password: passwordErrors.join(". ") });
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrors({ confirmPassword: "Passwords do not match" });
+      return;
+    }
+
+    try {
+      const res = await postJSON("/api/auth/reset-password", {
+        token: resetToken,
+        newPassword: formData.password,
+      });
+      setSuccessMessage(
+        res.message || "Password reset successful. You can now log in."
+      );
+      setErrors({});
+      // Switch back to login after 2 seconds
+      setTimeout(() => {
+        setMode("login");
+        setSuccessMessage("");
+        setResetToken("");
+        setFormData({
+          firstName: "",
+          lastName: "",
+          email: "",
+          phone: "",
+          password: "",
+          confirmPassword: "",
+        });
+      }, 2000);
+    } catch (error) {
+      setErrors({
+        general:
+          error.response?.message ||
+          error.message ||
+          "Failed to reset password",
+      });
+    }
+  };
+
   const switchMode = () => {
     setMode(mode === "login" ? "signup" : "login");
     setErrors({});
+    setSuccessMessage("");
+  };
+
+  const goToForgotPassword = () => {
+    setMode("forgot");
+    setErrors({});
+    setSuccessMessage("");
+  };
+
+  const goToResetPassword = () => {
+    setMode("reset");
+    setErrors({});
+    setSuccessMessage("");
+  };
+
+  const backToLogin = () => {
+    setMode("login");
+    setErrors({});
+    setSuccessMessage("");
+    setResetToken("");
+  };
+
+  const getModalTitle = () => {
+    switch (mode) {
+      case "forgot":
+        return "Forgot Password";
+      case "reset":
+        return "Reset Password";
+      case "signup":
+        return "Create Account";
+      default:
+        return "Welcome Back";
+    }
   };
 
   return (
@@ -145,7 +269,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
-              {mode === "login" ? "Welcome Back" : "Create Account"}
+              {getModalTitle()}
             </h2>
             <button
               onClick={onClose}
@@ -157,212 +281,408 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {successMessage && (
+              <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg">
+                {successMessage}
+              </div>
+            )}
+
             {errors.general && (
               <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
                 {errors.general}
               </div>
             )}
 
-            {mode === "signup" && (
+            {/* Forgot Password Mode */}
+            {mode === "forgot" && (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <p className="text-sm text-gray-600">
+                  Enter your email to receive a password reset token.
+                </p>
+                <div>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <input
+                      type="email"
+                      name="email"
+                      placeholder="Email Address"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                        errors.email ? "border-red-300" : "border-gray-300"
+                      }`}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-red-600">{errors.email}</p>
+                  )}
+                </div>
+
+                {resetToken && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-xs text-gray-600 mb-1">
+                      <strong>Dev token (copy this):</strong>
+                    </p>
+                    <pre className="text-xs whitespace-pre-wrap break-all bg-white p-2 rounded border border-gray-300">
+                      {resetToken}
+                    </pre>
+                    <button
+                      type="button"
+                      onClick={goToResetPassword}
+                      className="mt-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                    >
+                      Go to Reset Password →
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {isLoading ? "Sending..." : "Send Reset Token"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={backToLogin}
+                  className="w-full text-sm text-gray-600 hover:text-gray-800"
+                >
+                  ← Back to Login
+                </button>
+              </>
+            )}
+
+            {/* Reset Password Mode */}
+            {mode === "reset" && (
+              <>
+                <p className="text-sm text-gray-600">
+                  Enter the reset token and your new password.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reset Token
+                  </label>
+                  <input
+                    type="text"
+                    value={resetToken}
+                    onChange={(e) => setResetToken(e.target.value)}
+                    placeholder="Paste your reset token here"
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                      errors.resetToken ? "border-red-300" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.resetToken && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {errors.resetToken}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      placeholder="New Password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                        errors.password ? "border-red-300" : "border-gray-300"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {errors.password}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="confirmPassword"
+                      placeholder="Confirm Password"
+                      value={formData.confirmPassword}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                        errors.confirmPassword
+                          ? "border-red-300"
+                          : "border-gray-300"
+                      }`}
+                    />
+                  </div>
+                  {errors.confirmPassword && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {errors.confirmPassword}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {isLoading ? "Resetting..." : "Reset Password"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={backToLogin}
+                  className="w-full text-sm text-gray-600 hover:text-gray-800"
+                >
+                  ← Back to Login
+                </button>
+              </>
+            )}
+
+            {/* Login/Signup Mode */}
+            {(mode === "login" || mode === "signup") && (
+              <>
+                {mode === "signup" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                          <input
+                            type="text"
+                            name="firstName"
+                            placeholder="First Name"
+                            value={formData.firstName}
+                            onChange={handleInputChange}
+                            className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                              errors.firstName
+                                ? "border-red-300"
+                                : "border-gray-300"
+                            }`}
+                          />
+                        </div>
+                        {errors.firstName && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {errors.firstName}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                          <input
+                            type="text"
+                            name="lastName"
+                            placeholder="Last Name"
+                            value={formData.lastName}
+                            onChange={handleInputChange}
+                            className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                              errors.lastName
+                                ? "border-red-300"
+                                : "border-gray-300"
+                            }`}
+                          />
+                        </div>
+                        {errors.lastName && (
+                          <p className="mt-1 text-xs text-red-600">
+                            {errors.lastName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <input
+                          type="tel"
+                          name="phone"
+                          placeholder="Phone Number (Optional)"
+                          value={formData.phone}
+                          onChange={handleInputChange}
+                          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <input
+                      type="email"
+                      name="email"
+                      placeholder="Email Address"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                        errors.email ? "border-red-300" : "border-gray-300"
+                      }`}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-red-600">{errors.email}</p>
+                  )}
+                </div>
+
+                <div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      placeholder="Password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                        errors.password ? "border-red-300" : "border-gray-300"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {errors.password}
+                    </p>
+                  )}
+
+                  {/* Password Requirements Hint */}
+                  {mode === "signup" && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      <p>Password must contain:</p>
+                      <ul className="list-disc list-inside ml-2 space-y-1">
+                        <li
+                          className={
+                            formData.password.length >= 8
+                              ? "text-green-600"
+                              : ""
+                          }
+                        >
+                          At least 8 characters
+                        </li>
+                        <li
+                          className={
+                            /[A-Z]/.test(formData.password)
+                              ? "text-green-600"
+                              : ""
+                          }
+                        >
+                          One uppercase letter
+                        </li>
+                        <li
+                          className={
+                            /[a-z]/.test(formData.password)
+                              ? "text-green-600"
+                              : ""
+                          }
+                        >
+                          One lowercase letter
+                        </li>
+                        <li
+                          className={
+                            /\d/.test(formData.password) ? "text-green-600" : ""
+                          }
+                        >
+                          One digit
+                        </li>
+                        <li
+                          className={
+                            /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
+                              ? "text-green-600"
+                              : ""
+                          }
+                        >
+                          One special character
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {mode === "signup" && (
                   <div>
                     <div className="relative">
-                      <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                      <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                       <input
-                        type="text"
-                        name="firstName"
-                        placeholder="First Name"
-                        value={formData.firstName}
+                        type={showPassword ? "text" : "password"}
+                        name="confirmPassword"
+                        placeholder="Confirm Password"
+                        value={formData.confirmPassword}
                         onChange={handleInputChange}
                         className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                          errors.firstName
+                          errors.confirmPassword
                             ? "border-red-300"
                             : "border-gray-300"
                         }`}
                       />
                     </div>
-                    {errors.firstName && (
+                    {errors.confirmPassword && (
                       <p className="mt-1 text-xs text-red-600">
-                        {errors.firstName}
+                        {errors.confirmPassword}
                       </p>
                     )}
                   </div>
+                )}
 
-                  <div>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                      <input
-                        type="text"
-                        name="lastName"
-                        placeholder="Last Name"
-                        value={formData.lastName}
-                        onChange={handleInputChange}
-                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                          errors.lastName ? "border-red-300" : "border-gray-300"
-                        }`}
-                      />
-                    </div>
-                    {errors.lastName && (
-                      <p className="mt-1 text-xs text-red-600">
-                        {errors.lastName}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                    <input
-                      type="tel"
-                      name="phone"
-                      placeholder="Phone Number (Optional)"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="Email Address"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                    errors.email ? "border-red-300" : "border-gray-300"
-                  }`}
-                />
-              </div>
-              {errors.email && (
-                <p className="mt-1 text-xs text-red-600">{errors.email}</p>
-              )}
-            </div>
-
-            <div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="Password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                    errors.password ? "border-red-300" : "border-gray-300"
-                  }`}
-                />
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      {mode === "login"
+                        ? "Signing In..."
+                        : "Creating Account..."}
+                    </div>
+                  ) : mode === "login" ? (
+                    "Sign In"
                   ) : (
-                    <Eye className="h-5 w-5" />
+                    "Create Account"
                   )}
                 </button>
-              </div>
-              {errors.password && (
-                <p className="mt-1 text-xs text-red-600">{errors.password}</p>
-              )}
 
-              {/* Password Requirements Hint */}
-              {mode === "signup" && (
-                <div className="mt-2 text-xs text-gray-500">
-                  <p>Password must contain:</p>
-                  <ul className="list-disc list-inside ml-2 space-y-1">
-                    <li
-                      className={
-                        formData.password.length >= 8 ? "text-green-600" : ""
-                      }
+                {/* Forgot Password Link - Only show in login mode */}
+                {mode === "login" && (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={goToForgotPassword}
+                      className="text-sm text-indigo-600 hover:text-indigo-500 transition-colors"
                     >
-                      At least 8 characters
-                    </li>
-                    <li
-                      className={
-                        /[A-Z]/.test(formData.password) ? "text-green-600" : ""
-                      }
-                    >
-                      One uppercase letter
-                    </li>
-                    <li
-                      className={
-                        /[a-z]/.test(formData.password) ? "text-green-600" : ""
-                      }
-                    >
-                      One lowercase letter
-                    </li>
-                    <li
-                      className={
-                        /\d/.test(formData.password) ? "text-green-600" : ""
-                      }
-                    >
-                      One digit
-                    </li>
-                    <li
-                      className={
-                        /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
-                          ? "text-green-600"
-                          : ""
-                      }
-                    >
-                      One special character
-                    </li>
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {mode === "signup" && (
-              <div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    placeholder="Confirm Password"
-                    value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                      errors.confirmPassword
-                        ? "border-red-300"
-                        : "border-gray-300"
-                    }`}
-                  />
-                </div>
-                {errors.confirmPassword && (
-                  <p className="mt-1 text-xs text-red-600">
-                    {errors.confirmPassword}
-                  </p>
+                      Forgot Password?
+                    </button>
+                  </div>
                 )}
-              </div>
+              </>
             )}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  {mode === "login" ? "Signing In..." : "Creating Account..."}
-                </div>
-              ) : mode === "login" ? (
-                "Sign In"
-              ) : (
-                "Create Account"
-              )}
-            </button>
           </form>
 
           {/* Switch Mode */}

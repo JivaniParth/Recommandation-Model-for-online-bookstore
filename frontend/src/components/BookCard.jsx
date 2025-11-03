@@ -5,11 +5,16 @@ import StarRating from "./StarRating";
 const BookCard = ({ book, favorites, toggleFavorite, addToCart }) => {
   return (
     <div className="group bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200 hover:shadow-md transition-shadow duration-200">
-      <div className="relative aspect-[3/4] overflow-hidden">
+      <div className="relative aspect-3/4 overflow-hidden">
         <img
-          src={book.image}
-          alt={book.title}
+          src={
+            book.image || "https://via.placeholder.com/300x400?text=No+Image"
+          }
+          alt={book.title || "Book"}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          onError={(e) => {
+            e.target.src = "https://via.placeholder.com/300x400?text=No+Image";
+          }}
         />
         <button
           onClick={() => toggleFavorite(book.id)}
@@ -34,11 +39,13 @@ const BookCard = ({ book, favorites, toggleFavorite, addToCart }) => {
 
       <div className="p-4">
         <h3 className="font-medium text-gray-900 mb-1 line-clamp-2 text-sm">
-          {book.title}
+          {book.title || "Untitled Book"}
         </h3>
-        <p className="text-gray-600 text-xs mb-2">{book.author}</p>
+        <p className="text-gray-600 text-xs mb-2">
+          {book.author || "Unknown Author"}
+        </p>
         <p className="text-gray-500 text-xs mb-3 line-clamp-2 leading-relaxed">
-          {book.description}
+          {book.description || "No description available"}
         </p>
 
         <div className="mb-3">
@@ -51,11 +58,17 @@ const BookCard = ({ book, favorites, toggleFavorite, addToCart }) => {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
             <span className="text-lg font-semibold text-gray-900">
-              ${book.price}
+              $
+              {typeof book.price === "number"
+                ? book.price.toFixed(2)
+                : book.price || "0.00"}
             </span>
-            {book.originalPrice > book.price && (
+            {book.originalPrice && book.originalPrice > book.price && (
               <span className="text-sm text-gray-500 line-through">
-                ${book.originalPrice}
+                $
+                {typeof book.originalPrice === "number"
+                  ? book.originalPrice.toFixed(2)
+                  : book.originalPrice}
               </span>
             )}
           </div>

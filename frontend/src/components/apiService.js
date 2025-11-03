@@ -27,10 +27,26 @@ class ApiService {
   }
 
   async handleResponse(response) {
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.message || "API request failed");
+    let data = {};
+    try {
+      // Attempt to parse response body as JSON
+      data = await response.json();
+    } catch (e) {
+      // If parsing fails (e.g., server returned plain text or crashed mid-stream),
+      // we'll proceed with an empty data object and rely on response.status/ok.
+      console.warn("Failed to parse response body as JSON:", e);
     }
+
+    // If response status is not OK (4xx or 5xx), throw a consistent error
+    if (!response.ok) {
+      const errorMsg =
+        data.error || data.message || `HTTP error! Status: ${response.status}`;
+
+      // This is the important check: throw an error object with a simple string message.
+      throw new Error(errorMsg);
+    }
+
+    // Return the parsed data for successful 2xx responses
     return data;
   }
 
@@ -63,10 +79,21 @@ class ApiService {
   }
 
   async verifyToken() {
-    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
-      headers: this.getHeaders(),
-    });
-    return await this.handleResponse(response);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+        headers: this.getHeaders(),
+      });
+      // This relies on handleResponse to check response.ok and parse JSON safely
+      return await this.handleResponse(response);
+    } catch (error) {
+      // This final catch block ensures a complex object cannot escape the promise chain.
+      const errorMessage =
+        error && error.message
+          ? error.message
+          : "Fatal Network/Stream Error (Verify Token). Check server stability.";
+
+      throw new Error(errorMessage);
+    }
   }
 
   logout() {

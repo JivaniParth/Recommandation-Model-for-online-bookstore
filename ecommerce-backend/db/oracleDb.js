@@ -141,6 +141,11 @@ module.exports = {
   close,
   execute,
   resultToArray,
+  OUT_FORMAT_OBJECT: oracledb.OUT_FORMAT_OBJECT,
+  BIND_OUT: oracledb.BIND_OUT,
+  NUMBER: oracledb.NUMBER,
+  STRING: oracledb.STRING,
+  DATE: oracledb.DATE,
   get pool() {
     return pool;
   },

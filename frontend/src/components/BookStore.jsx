@@ -64,17 +64,32 @@ const BookStore = () => {
           apiService.getCategories(),
         ]);
 
-        if (booksResponse.success) {
+        if (booksResponse && booksResponse.success) {
           setBooks(booksResponse.books);
           setFilteredBooks(booksResponse.books);
+        } else {
+          // This branch should only be hit if API returns 200 with {success:false}
+          throw new Error(
+            booksResponse.error ||
+              "Failed to retrieve book data (Invalid response format)."
+          );
         }
 
-        if (categoriesResponse.success) {
+        if (categoriesResponse && categoriesResponse.success) {
           setCategories(categoriesResponse.categories);
+        } else {
+          throw new Error(
+            categoriesResponse.error ||
+              "Failed to retrieve category data (Invalid response format)."
+          );
         }
       } catch (error) {
         console.error("Error fetching data:", error);
-        setError("Failed to load books. Please try again.");
+        setError(
+          error.message ||
+            String(error) ||
+            "A critical, uncaught error occurred during initial data loading."
+        );
       } finally {
         setLoading(false);
       }
@@ -97,15 +112,37 @@ const BookStore = () => {
     const fetchCart = async () => {
       if (isAuthenticated) {
         try {
+          // Use the protected API service call
           const response = await apiService.getCart();
           if (response.success) {
             setCart(response.cart);
+          } else {
+            // Although apiService.handleResponse should catch this,
+            // this catch block is the final safety net.
+            throw new Error(response.error || "Failed to load cart data.");
           }
         } catch (error) {
-          console.error("Error fetching cart:", error);
-          if (!error.message.includes("token")) {
-            setError("Failed to load cart");
+          // If it's a known authentication error (like invalid token), just log it
+          // and clear cart locally without displaying a huge error.
+          console.error(
+            "Error fetching cart (likely token issue):",
+            error.message
+          );
+
+          // CRITICAL SAFETY: Check if the error message suggests a stream object leak.
+          if (
+            error.message.includes("Object") ||
+            error.message.includes("_readableState")
+          ) {
+            setError(
+              "Cart loading failed due to a critical network stream error. See console for details."
+            );
+          } else if (!error.message.includes("Invalid token")) {
+            // Only show generic network error if it's not a token issue
+            // or the stream leak (which we're trying to prevent).
+            setError("Failed to load cart due to connection issues.");
           }
+          setCart([]); // Clear cart to reset state
         }
       } else {
         setCart([]);

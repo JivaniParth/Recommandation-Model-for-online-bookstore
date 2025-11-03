@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, TrendingUp, Users, GitBranch } from "lucide-react";
+import apiService from "./apiService"; // <-- CRITICAL: Ensure this is imported
 
 // Recommendations Component
 const RecommendationsSection = ({
@@ -24,45 +25,112 @@ const RecommendationsSection = ({
       setLoading(true);
       setError(null);
 
-      // First, get the A/B test assignment for this user
-      const abResponse = await fetch(
-        `http://localhost:4000/api/ab/user/${userId}`
-      );
-      const abData = await abResponse.json();
-
-      if (!abData.ok) {
-        throw new Error("Failed to get A/B assignment");
+      // Try to get A/B assignment, but continue even if it fails
+      let modelName = 'content';
+      let modelId = null;
+      
+      try {
+        const abData = await apiService.getABAssignment(userId);
+        const { assignment } = abData;
+        modelName = assignment.model_name;
+        modelId = assignment.model_id;
+        setModelInfo({
+          id: assignment.model_id,
+          name: assignment.model_name,
+        });
+      } catch (abError) {
+        console.warn("A/B assignment failed, using default model:", abError);
+        setModelInfo({ id: 1, name: 'content' });
       }
 
-      const { assignment } = abData;
-      setModelInfo({
-        id: assignment.model_id,
-        name: assignment.model_name,
-      });
+      // Try Oracle-based recommendations first (more reliable)
+      try {
+        const response = await fetch(`http://localhost:5000/api/books/recommendations/${userId}?limit=6`);
+        const recData = await response.json();
+        
+        if (recData.success && recData.recommendations && recData.recommendations.length > 0) {
+          // Sort recommendations: Highly Recommended (score >= 7) first, then by score descending
+          const sortedRecommendations = recData.recommendations.sort((a, b) => b.score - a.score);
+          setRecommendations(sortedRecommendations);
+          
+          // Log impressions
+          if (modelId) {
+            recData.recommendations.forEach(async (rec) => {
+              await logEvent({
+                user_id: userId,
+                product_id: rec.product_id,
+                model_id: modelId,
+                event_type: "impression",
+                metadata: { score: rec.score },
+              });
+            });
+          }
+          return; // Success, exit early
+        }
+      } catch (oracleError) {
+        console.warn("Oracle recommendations failed, trying backend service:", oracleError);
+      }
 
-      // Fetch recommendations (backend will use A/B assignment automatically)
-      const recResponse = await fetch(
-        `http://localhost:4000/api/recommendations/${userId}?limit=6`
-      );
-      const recData = await recResponse.json();
+      // Fallback to backend recommendation service (Neo4j/PostgreSQL)
+      const recData = await apiService.getRecommendations(userId, { limit: 6 });
 
-      if (recData.recommendations) {
-        setRecommendations(recData.recommendations);
+      if (recData.recommendations && recData.recommendations.length > 0) {
+        // Extract product IDs from recommendations
+        const productIds = recData.recommendations.map(rec => rec.product_id);
+        
+        // Fetch actual book details from Oracle database
+        const booksResponse = await fetch('http://localhost:5000/api/books/by-ids', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ids: productIds }),
+        });
+        
+        const booksData = await booksResponse.json();
+        
+        if (booksData.success && booksData.books) {
+          // Merge recommendation scores with actual book data
+          const enrichedRecommendations = recData.recommendations.map(rec => {
+            const book = booksData.books.find(b => b.isbn === rec.product_id || b.id === rec.product_id);
+            if (book) {
+              return {
+                ...book,
+                product_id: rec.product_id,
+                product_name: book.title,
+                product_image: book.image,
+                score: rec.score,
+              };
+            }
+            // Fallback to recommendation data if book not found
+            return rec;
+          });
+          
+          // Sort recommendations by score descending
+          const sortedRecommendations = enrichedRecommendations.sort((a, b) => b.score - a.score);
+          setRecommendations(sortedRecommendations);
+        } else {
+          // If book fetch fails, use original recommendations sorted by score
+          const sortedRecs = recData.recommendations.sort((a, b) => b.score - a.score);
+          setRecommendations(sortedRecs);
+        }
 
         // Log impressions for each recommended product
-        recData.recommendations.forEach(async (rec) => {
-          await logEvent({
-            user_id: userId,
-            product_id: rec.product_id,
-            model_id: assignment.model_id,
-            event_type: "impression",
-            metadata: { score: rec.score },
+        if (modelId) {
+          recData.recommendations.forEach(async (rec) => {
+            await logEvent({
+              user_id: userId,
+              product_id: rec.product_id,
+              model_id: modelId,
+              event_type: "impression",
+              metadata: { score: rec.score },
+            });
           });
-        });
+        }
       }
     } catch (err) {
       console.error("Error fetching recommendations:", err);
-      setError(err.message);
+      setError(err.message || String(err));
     } finally {
       setLoading(false);
     }
@@ -70,11 +138,8 @@ const RecommendationsSection = ({
 
   const logEvent = async (eventData) => {
     try {
-      await fetch("http://localhost:4000/api/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(eventData),
-      });
+      // CRITICAL FIX 3: Use the centralized, safe logger
+      await apiService.logRecommendationEvent(eventData);
     } catch (err) {
       console.error("Error logging event:", err);
     }
@@ -98,6 +163,7 @@ const RecommendationsSection = ({
     onAddToCart(book);
   };
 
+  // ... (rest of helper functions getModelIcon, getModelColor, and the JSX return)
   const getModelIcon = (modelName) => {
     switch (modelName?.toLowerCase()) {
       case "collaborative":
@@ -239,9 +305,13 @@ const RecommendationsSection = ({
                   </svg>
                 </button>
 
-                {/* Recommendation Score Badge */}
-                <div className="absolute top-2 left-2 bg-indigo-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                  {Math.round(book.score * 100) / 10}/10
+                {/* Recommendation Badge */}
+                <div className={`absolute top-2 left-2 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${
+                  book.score >= 7 
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white' 
+                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
+                }`}>
+                  {book.score >= 7 ? '⭐ Highly Recommended' : '✓ Recommended'}
                 </div>
               </div>
 

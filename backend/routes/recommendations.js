@@ -17,6 +17,12 @@ router.get("/:userId", async (req, res) => {
       const assignment = await abService.getOrAssignUserModel(userId);
       model = (assignment.model_name || "graph").toLowerCase();
     }
+
+    // Normalize model name (handle both "collaborative" and "collab")
+    if (model === "collaborative") {
+      model = "collab";
+    }
+
     if (model === "graph") {
       const recs = await neo4jService.getGraphRecommendations(userId, limit);
       return res.json({ model: "graph", recommendations: recs });
@@ -37,7 +43,9 @@ router.get("/:userId", async (req, res) => {
 
     return res
       .status(400)
-      .json({ error: "Unknown model (graph|collab|content) expected" });
+      .json({
+        error: "Unknown model (graph|collab|content|collaborative) expected",
+      });
   } catch (err) {
     console.error("Recommendation error", err);
     return res.status(500).json({ error: "Internal server error" });

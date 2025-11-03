@@ -1,7 +1,7 @@
 import "./App.css";
 import BookStore from "./components/BookStore";
-import AdminDashboard from "./Components/AdminDashboard";
-import ErrorBoundary from "./Components/ErrorBoundary";
+import AdminDashboard from "./components/AdminDashboard";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { AuthProvider } from "./components/AuthContext";
 import { useAuth } from "./components/useAuth";
 import APIDiagnostics from "./components/APIDiagnostics";
