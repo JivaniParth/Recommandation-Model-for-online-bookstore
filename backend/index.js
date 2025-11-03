@@ -17,8 +17,8 @@ app.use(
 const recommendations = require("./routes/recommendations");
 app.use("/api/recommendations", recommendations);
 
-const products = require("./routes/products");
-app.use("/api/products", products);
+// const products = require("./routes/products");
+// app.use("/api/products", products);
 
 // A/B testing routes
 const abRoutes = require("./routes/ab");

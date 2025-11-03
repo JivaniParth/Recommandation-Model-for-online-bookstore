@@ -1,5 +1,11 @@
-const { pool } = require("./postgresService");
+// backend/services/eventsService.js
 
+// Remove the import of pool from "./postgresService" as it's no longer necessary.
+
+/**
+ * Mock logEvent function: logs the event to the console instead of Postgres.
+ * In a real application, this should be updated to call the Oracle backend API (Port 5000).
+ */
 async function logEvent({
   user_id = null,
   product_id = null,
@@ -8,31 +14,33 @@ async function logEvent({
   metadata = {},
 }) {
   if (!event_type) throw new Error("event_type is required");
-  const client = await pool.connect();
-  try {
-    const sql = `INSERT INTO recommendation_events (user_id, product_id, model_id, event_type, metadata) VALUES ($1,$2,$3,$4,$5) RETURNING *`;
-    const { rows } = await client.query(sql, [
-      user_id,
-      product_id,
-      model_id,
-      event_type,
-      metadata,
-    ]);
-    return rows[0];
-  } finally {
-    client.release();
-  }
+
+  const event = {
+    user_id,
+    product_id,
+    model_id,
+    event_type,
+    metadata,
+    created_at: new Date().toISOString(),
+    id: Math.floor(Math.random() * 1000),
+  };
+
+  console.log(
+    `[MOCK EVENT LOGGED] Type: ${event_type}, User: ${user_id}, Model: ${model_id}`
+  );
+
+  return event;
 }
 
+/**
+ * Mock getCountsByModel function: returns static/mock counts.
+ */
 async function getCountsByModel(modelId) {
-  const client = await pool.connect();
-  try {
-    const sql = `SELECT event_type, COUNT(*)::int AS cnt FROM recommendation_events WHERE model_id = $1 GROUP BY event_type`;
-    const { rows } = await client.query(sql, [modelId]);
-    return rows;
-  } finally {
-    client.release();
-  }
+  console.log(`[MOCK EVENT COUNTS] Returning mock counts for model ${modelId}`);
+  return [
+    { event_type: "impression", cnt: 100 + modelId * 10 },
+    { event_type: "click", cnt: 20 + modelId * 5 },
+  ];
 }
 
 module.exports = { logEvent, getCountsByModel };

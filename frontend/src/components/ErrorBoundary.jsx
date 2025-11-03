@@ -15,6 +15,27 @@ class ErrorBoundary extends React.Component {
     console.error("Error caught by boundary:", error, errorInfo);
   }
 
+  // Helper function to safely extract error message
+  getErrorMessage = (error) => {
+    if (!error) return "An unexpected error occurred";
+
+    // Check if the error or its message is an object (which triggers the React error)
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      !Array.isArray(error) &&
+      !error.message
+    ) {
+      return "Critical backend error: An unexpected non-JSON object was returned (likely a database connection failure).";
+    }
+    if (typeof error.message === "object" && error.message !== null) {
+      return "Critical backend error: An unexpected non-JSON object was returned (likely a database connection failure).";
+    }
+
+    // Return the message or safely stringify the whole error object
+    return error.message || String(error) || "An unexpected error occurred";
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -27,7 +48,8 @@ class ErrorBoundary extends React.Component {
               Something went wrong
             </h2>
             <p className="mt-2 text-sm text-center text-gray-600">
-              {this.state.error?.message || "An unexpected error occurred"}
+              {/* Use the new safe function here */}
+              {this.getErrorMessage(this.state.error)}
             </p>
             <button
               onClick={() => window.location.reload()}
