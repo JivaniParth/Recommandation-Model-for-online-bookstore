@@ -1,14 +1,64 @@
 // ecommerce-backend/db/oracleDb.js
 const oracledb = require("oracledb");
+const path = require("path");
+const fs = require("fs");
 
 // Enable auto-commit for every statement
 oracledb.autoCommit = true;
 
 // Configure Oracle client
 // Set this to your Oracle Instant Client location if needed
-oracledb.initOracleClient({
-  libDir: "C:\\oracle\\instantclient_19_8",
-});
+const instantClientPath =
+  process.env.ORACLE_INSTANT_CLIENT_PATH || "C:\\oracle\\instantclient_23_9";
+
+// Only initialize if the path exists or if ORACLE_INSTANT_CLIENT_PATH is explicitly set
+if (
+  process.env.ORACLE_INSTANT_CLIENT_PATH ||
+  fs.existsSync(instantClientPath)
+) {
+  try {
+    oracledb.initOracleClient({
+      libDir: instantClientPath,
+    });
+    console.log(
+      `✅ Oracle Instant Client initialized from: ${instantClientPath}`
+    );
+  } catch (err) {
+    console.error("❌ Failed to initialize Oracle Client:", err.message);
+    console.log("\n📋 To fix this:");
+    console.log("1. Download Oracle Instant Client from:");
+    console.log(
+      "   https://www.oracle.com/database/technologies/instant-client/winx64-64-downloads.html"
+    );
+    console.log(
+      "2. Extract it to a directory (e.g., C:\\oracle\\instantclient_23_9)"
+    );
+    console.log(
+      "3. Set the environment variable ORACLE_INSTANT_CLIENT_PATH to that directory"
+    );
+    console.log("   OR add the directory to your Windows PATH");
+    process.exit(1);
+  }
+} else {
+  console.error("❌ Oracle Instant Client not found!");
+  console.log(`\n📍 Checked path: ${instantClientPath}`);
+  console.log("\n📋 To fix this:");
+  console.log("1. Download Oracle Instant Client from:");
+  console.log(
+    "   https://www.oracle.com/database/technologies/instant-client/winx64-64-downloads.html"
+  );
+  console.log(
+    "2. Extract it to a directory (e.g., C:\\oracle\\instantclient_23_9)"
+  );
+  console.log(
+    "3. Set the environment variable ORACLE_INSTANT_CLIENT_PATH in your .env file:"
+  );
+  console.log("   ORACLE_INSTANT_CLIENT_PATH=C:\\oracle\\instantclient_23_9");
+  console.log(
+    "   OR add the directory to your Windows PATH environment variable"
+  );
+  process.exit(1);
+}
 
 const dbConfig = {
   user: process.env.ORACLE_USER,
