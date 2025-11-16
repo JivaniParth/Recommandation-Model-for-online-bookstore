@@ -26,9 +26,9 @@ const RecommendationsSection = ({
       setError(null);
 
       // Try to get A/B assignment, but continue even if it fails
-      let modelName = 'content';
+      let modelName = "content";
       let modelId = null;
-      
+
       try {
         const abData = await apiService.getABAssignment(userId);
         const { assignment } = abData;
@@ -40,19 +40,27 @@ const RecommendationsSection = ({
         });
       } catch (abError) {
         console.warn("A/B assignment failed, using default model:", abError);
-        setModelInfo({ id: 1, name: 'content' });
+        setModelInfo({ id: 1, name: "content" });
       }
 
       // Try Oracle-based recommendations first (more reliable)
       try {
-        const response = await fetch(`http://localhost:5000/api/books/recommendations/${userId}?limit=6`);
+        const response = await fetch(
+          `http://localhost:5000/api/books/recommendations/${userId}?limit=6`
+        );
         const recData = await response.json();
-        
-        if (recData.success && recData.recommendations && recData.recommendations.length > 0) {
+
+        if (
+          recData.success &&
+          recData.recommendations &&
+          recData.recommendations.length > 0
+        ) {
           // Sort recommendations: Highly Recommended (score >= 7) first, then by score descending
-          const sortedRecommendations = recData.recommendations.sort((a, b) => b.score - a.score);
+          const sortedRecommendations = recData.recommendations.sort(
+            (a, b) => b.score - a.score
+          );
           setRecommendations(sortedRecommendations);
-          
+
           // Log impressions
           if (modelId) {
             recData.recommendations.forEach(async (rec) => {
@@ -68,7 +76,10 @@ const RecommendationsSection = ({
           return; // Success, exit early
         }
       } catch (oracleError) {
-        console.warn("Oracle recommendations failed, trying backend service:", oracleError);
+        console.warn(
+          "Oracle recommendations failed, trying backend service:",
+          oracleError
+        );
       }
 
       // Fallback to backend recommendation service (Neo4j/PostgreSQL)
@@ -76,23 +87,28 @@ const RecommendationsSection = ({
 
       if (recData.recommendations && recData.recommendations.length > 0) {
         // Extract product IDs from recommendations
-        const productIds = recData.recommendations.map(rec => rec.product_id);
-        
+        const productIds = recData.recommendations.map((rec) => rec.product_id);
+
         // Fetch actual book details from Oracle database
-        const booksResponse = await fetch('http://localhost:5000/api/books/by-ids', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ids: productIds }),
-        });
-        
+        const booksResponse = await fetch(
+          "http://localhost:5000/api/books/by-ids",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ids: productIds }),
+          }
+        );
+
         const booksData = await booksResponse.json();
-        
+
         if (booksData.success && booksData.books) {
           // Merge recommendation scores with actual book data
-          const enrichedRecommendations = recData.recommendations.map(rec => {
-            const book = booksData.books.find(b => b.isbn === rec.product_id || b.id === rec.product_id);
+          const enrichedRecommendations = recData.recommendations.map((rec) => {
+            const book = booksData.books.find(
+              (b) => b.isbn === rec.product_id || b.id === rec.product_id
+            );
             if (book) {
               return {
                 ...book,
@@ -105,13 +121,17 @@ const RecommendationsSection = ({
             // Fallback to recommendation data if book not found
             return rec;
           });
-          
+
           // Sort recommendations by score descending
-          const sortedRecommendations = enrichedRecommendations.sort((a, b) => b.score - a.score);
+          const sortedRecommendations = enrichedRecommendations.sort(
+            (a, b) => b.score - a.score
+          );
           setRecommendations(sortedRecommendations);
         } else {
           // If book fetch fails, use original recommendations sorted by score
-          const sortedRecs = recData.recommendations.sort((a, b) => b.score - a.score);
+          const sortedRecs = recData.recommendations.sort(
+            (a, b) => b.score - a.score
+          );
           setRecommendations(sortedRecs);
         }
 
@@ -193,7 +213,7 @@ const RecommendationsSection = ({
   if (!userId) return null;
 
   return (
-    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 mb-8 border border-indigo-100">
+    <div className="bg-linear-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 mb-8 border border-indigo-100">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <div className="bg-white p-2 rounded-lg shadow-sm">
@@ -261,7 +281,7 @@ const RecommendationsSection = ({
               key={book.product_id}
               className="group bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
             >
-              <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
+              <div className="relative aspect-3/4 overflow-hidden bg-gray-100">
                 <img
                   src={
                     book.product_image ||
@@ -306,17 +326,19 @@ const RecommendationsSection = ({
                 </button>
 
                 {/* Recommendation Badge */}
-                <div className={`absolute top-2 left-2 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${
-                  book.score >= 7 
-                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white' 
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
-                }`}>
-                  {book.score >= 7 ? '⭐ Highly Recommended' : '✓ Recommended'}
+                <div
+                  className={`absolute top-2 left-2 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${
+                    book.score >= 7
+                      ? "bg-linear-to-r from-green-500 to-emerald-600 text-white"
+                      : "bg-linear-to-r from-indigo-500 to-purple-600 text-white"
+                  }`}
+                >
+                  {book.score >= 7 ? "⭐ Highly Recommended" : "✓ Recommended"}
                 </div>
               </div>
 
               <div className="p-3">
-                <h3 className="font-medium text-sm text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">
+                <h3 className="font-medium text-sm text-gray-900 mb-1 line-clamp-2 min-h-10">
                   {book.product_name || book.title || "Unknown Title"}
                 </h3>
 

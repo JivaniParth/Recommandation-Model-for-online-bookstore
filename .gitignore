@@ -1,5 +1,8 @@
 Online Book Store
 PROJECTPLAN.md
+QUICKSTART.md
+SETUP_GUIDE.md
+TEST_AB_EVENTS.md
 package-lock.json
 setup.ps1
 docker-compose.yml

@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const neo4jService = require("../services/neo4jService");
-const pgService = require("../services/postgresService");
+const oracleService = require("../services/oracleService");
+const mongoService = require("../services/mongoService");
 const abService = require("../services/abService");
 
 // GET /api/recommendations/:userId?model=graph|collab|content&limit=10
@@ -29,7 +30,7 @@ router.get("/:userId", async (req, res) => {
     }
 
     if (model === "collab") {
-      const recs = await pgService.getCollaborativeRecommendations(
+      const recs = await oracleService.getCollaborativeRecommendations(
         userId,
         limit
       );
@@ -37,15 +38,13 @@ router.get("/:userId", async (req, res) => {
     }
 
     if (model === "content") {
-      const recs = await pgService.getContentRecommendations(userId, limit);
+      const recs = await mongoService.getContentRecommendations(userId, limit);
       return res.json({ model: "content", recommendations: recs });
     }
 
-    return res
-      .status(400)
-      .json({
-        error: "Unknown model (graph|collab|content|collaborative) expected",
-      });
+    return res.status(400).json({
+      error: "Unknown model (graph|collab|content|collaborative) expected",
+    });
   } catch (err) {
     console.error("Recommendation error", err);
     return res.status(500).json({ error: "Internal server error" });

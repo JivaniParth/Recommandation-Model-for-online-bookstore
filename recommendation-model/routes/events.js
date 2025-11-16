@@ -28,4 +28,32 @@ router.get("/model/:modelId/counts", async (req, res) => {
   }
 });
 
+// GET /api/events/user/:userId
+// Get recent events for a specific user
+router.get("/user/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId);
+  const limit = parseInt(req.query.limit) || 50;
+  if (!userId) return res.status(400).json({ error: "invalid userId" });
+
+  try {
+    const events = await eventsService.getUserEvents(userId, limit);
+    return res.json({ ok: true, events, count: events.length });
+  } catch (err) {
+    console.error("getUserEvents failed", err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/events/stats
+// Get overall event statistics
+router.get("/stats", async (req, res) => {
+  try {
+    const stats = await eventsService.getOverallStats();
+    return res.json({ ok: true, stats });
+  } catch (err) {
+    console.error("getOverallStats failed", err.message);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;
