@@ -1,4 +1,4 @@
-# Recommandation Model for E-Commerce (scaffold)
+# Recommandation Model for Online Bookstore (scaffold)
 
 This repository is a scaffold for the recommendation model experiments described in the project plan.
 It contains a minimal Node.js + Express API with: Postgres service stubs, Neo4j integration, and a sync script.
