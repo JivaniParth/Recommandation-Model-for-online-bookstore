@@ -1,5 +1,8 @@
 # Recommandation Model for Online Bookstore (scaffold)
 
+> This project is part of the **BookHaven System Design Study**  
+> 🔗 Main repository: https://github.com/JivaniParth/BookHaven-System-Design-Study
+
 This repository is a scaffold for the recommendation model experiments described in the project plan.
 It contains a minimal Node.js + Express API with: Postgres service stubs, Neo4j integration, and a sync script.
 
